@@ -14,6 +14,9 @@
 
 #include <math.h>
 
+#include "Object.hpp"
+#include "main.hpp"
+
 #define PI_1 M_PI/2
 #define PI_2 PI_1*3
 #define DR 0.0174533
@@ -27,19 +30,8 @@ const int speed = 5;
 
 int tile_size = 64;
 
-int map_w=8;
-int map_h=8;
-int map_s=map_w*map_h;
-int map[]={
-    1,1,1,1,1,1,1,1,
-    1,0,0,1,0,0,0,1,
-    1,0,0,1,0,0,0,1,
-    1,1,0,1,0,0,0,1,
-    1,0,0,0,0,0,0,1,
-    1,0,0,0,0,0,0,1,
-    1,0,0,0,0,0,0,1,
-    1,1,1,1,1,1,1,1,
-};
+extern Map* map = new Map();
+extern Object* player = new Object();
 
 float dist(float ax, float ay, float bx, float by){
     return sqrt((bx-ax)*(bx-ax) + (by-ay)*(by-ay));
@@ -48,7 +40,6 @@ float dist(float ax, float ay, float bx, float by){
 float roundRad(float r){
     return(r<0 ? r+M_PI*2 : ( r>M_PI*2 ? r-M_PI*2 : r ));
 }
-
 
 void updatePlayerDelta(){
     pdx=cos(pa)*speed;
@@ -68,8 +59,8 @@ void raycast(float radiant, float inp_x, float inp_y, float* out_dist, float* tx
         float x_offset = -y_offset*aTan;   
 
         for(int d=0; d<8; d++){
-            int mi = ((int) (*ty)>>6)*map_w+((int) (*tx)>>6);
-            if(mi<map_s && mi>-1 && map[mi]==1){
+            int mi = ((int) (*ty)>>6)*map->width+((int) (*tx)>>6);
+            if(mi<map->size && mi>-1 && map->tiles[mi]==1){
                 break;
             }else{
                 *tx+=x_offset;
@@ -91,8 +82,8 @@ void raycast(float radiant, float inp_x, float inp_y, float* out_dist, float* tx
         y_offset = -x_offset*nTan;   
 
         for(int d=0; d<8; d++){
-            int mi = ((int) (*ty)>>6)*map_w+((int) (*tx)>>6);
-            if(mi<map_s && mi>-1 && map[mi]==1){
+            int mi = ((int) (*ty)>>6)*map->width+((int) (*tx)>>6);
+            if(mi<map->size && mi>-1 && map->tiles[mi]==1){
                 break;
             }else{
                 *tx+=x_offset;
@@ -109,6 +100,15 @@ void raycast(float radiant, float inp_x, float inp_y, float* out_dist, float* tx
         *out_dist = tDist;
     }
 }
+
+int texture_w = 4;
+int texture_h = 4;
+int texture[]={
+    0,0,0,0,
+    1,1,1,1,
+    0,0,0,0,
+    1,1,1,1,
+};
 
 void drawRays3D(){
 
@@ -144,8 +144,8 @@ void drawRays3D(){
     //     while(d++<dl){
     //         mx = (int) (rx)>>6;
     //         my = (int) (ry)>>6;
-    //         mi = my*map_w+mx;
-    //         if(mi<map_s && mi>-1 && map[mi]==1){
+    //         mi = my*map->width+mx;
+    //         if(mi<map->size && mi>-1 && map->tiles[mi]==1){
     //             d=dl;
     //         }else{
     //             rx+=xo;
@@ -176,8 +176,8 @@ void drawRays3D(){
     //     while(d++<dl){
     //         mx = (int) (rx)>>6;
     //         my = (int) (ry)>>6;
-    //         mi = my*map_w+mx;
-    //         if(mi<map_s && mi>-1 && map[mi]==1){
+    //         mi = my*map->width+mx;
+    //         if(mi<map->size && mi>-1 && map->tiles[mi]==1){
     //             d=dl;
     //         }else{
     //             rx+=xo;
@@ -208,6 +208,8 @@ void drawRays3D(){
         float ray_dist=0;
         raycast(ra, px, py, &ray_dist, &ray_x, &ray_y);
         
+        if(ray_dist==0) continue;
+
         float col = 5000 / ray_dist / tile_size ;
 
         glColor3f(col,0,col);
@@ -217,21 +219,39 @@ void drawRays3D(){
         glVertex2i(ray_x, ray_y);
         glEnd();
 
-        //Draw Wall
+        //Draw Background
+        // glColor3f(0,0,1);
+        // glBegin(GL_QUADS);
+        // glVertex2i(512, 0);
+        // glVertex2i(512, 512);
+        // glVertex2i(1024, 512);
+        // glVertex2i(1024, 0);
+        // glEnd();
+
+        //Draw Walls
 
         ray_dist = ray_dist * cos(pa - ra);
 
         int lineH = (int) 320*tile_size/ray_dist;
         int off = (512 - lineH) / 2;
-        lineH += off;
+        // lineH = std::min(lineH, 320);
+        
 
-        glColor3f(col,0,col);
-        glBegin(GL_QUADS);
-        glVertex2i(512+r*4, off);
-        glVertex2i(512+r*4, lineH);
-        glVertex2i(512+(r+1)*4, lineH);
-        glVertex2i(512+(r+1)*4, off);
-        glEnd();
+        float ty=0;
+        float ty_step=texture_h/(float)lineH;
+        // printf("%f\n", ty_step);
+        int tc = 0;
+        float tx=ray_x/(float) tile_size * texture_w;
+        printf("%f %f\n", tx, tx * texture_w);
+        for(int y=0; y<lineH; y++){
+            tc = texture[(int) ty*texture_w+(int) tx];
+            glColor3f(1,0,tc);
+            glPointSize(8);
+            glBegin(GL_POINTS);
+            glVertex2i(516+r*4, off+y);
+            glEnd();
+            ty += ty_step;
+        }
 
         ra=roundRad(ra+DR/2);
     }
@@ -239,9 +259,10 @@ void drawRays3D(){
 
 void drawMap(){
     int col;
-    for(int y=0; y<map_h; y++){
-        for(int x=0; x<map_w; x++){
-            col = map[x+y*map_w];
+    for(int y=0; y<map->height; y++){
+        for(int x=0; x<map->width; x++){
+            col = map->tiles[x+y*map->width];
+            // printf("%i \n", col);
             glColor3f(col,col,col);
             glBegin(GL_QUADS);
             glVertex2i(x*tile_size+1, y*tile_size+1);
@@ -307,12 +328,16 @@ void keyUp(unsigned char key, int x, int y){
 }
 
 void init(){
+    map->width=8;
+    map->height=8;
+    map->load("data/maps/dun_0.yaml");
+
     glClearColor(0.3, 0.3, 0.3, 0);
     gluOrtho2D(0, 1024, 512, 0);
 
-    px=356.082550;
-    py=352.083557;
-    // pa=0.853985;
+    px=32;
+    py=128;
+    pa=PI_2;
 
     updatePlayerDelta();
 }
